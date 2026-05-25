@@ -4,20 +4,24 @@ import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from dotenv import load_dotenv
 from mapreduce import run_mapreduce
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# ---------------- SECURITY FIX (MOBILE + SESSION) ----------------
+# ---------------- SECURITY ----------------
 app.secret_key = os.environ.get("SECRET_KEY", "default-secret")
 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = True
 
-
+# ---------------- FOLDERS ----------------
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# IMPORTANT FIX: ensure uploads folder exists (Railway safe)
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 ADMIN_USER = "taimoor"
 ADMIN_PASS = "0000"
@@ -70,28 +74,48 @@ def dashboard():
         return redirect(url_for("login"))
 
     if request.method == "POST":
-        file = request.files["logfile"]
+        file = request.files.get("logfile")
 
-        if file and file.filename.endswith(".log"):
-            filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
-            file.save(filepath)
+        if not file or file.filename == "":
+            return "No file selected"
 
+        if not file.filename.endswith(".log"):
+            return "Only .log files allowed"
+
+        # Safe filename handling
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+
+        file.save(filepath)
+
+        # ---------------- MAPREDUCE SAFETY ----------------
+        try:
             results = run_mapreduce(filepath)
+        except Exception as e:
+            return f"MapReduce Error: {str(e)}"
 
+        if not isinstance(results, dict):
+            return "Invalid MapReduce output (must be dict)"
+
+        # ---------------- DATABASE SAVE ----------------
+        try:
             conn = get_db()
             cur = conn.cursor()
 
             for key, value in results.items():
                 cur.execute(
                     "INSERT INTO results (filename, key, value) VALUES (%s, %s, %s)",
-                    (file.filename, key, value)
+                    (filename, key, value)
                 )
 
             conn.commit()
             cur.close()
             conn.close()
 
-            return render_template("results.html", results=results, filename=file.filename)
+        except Exception as e:
+            return f"Database Error: {str(e)}"
+
+        return render_template("results.html", results=results, filename=filename)
 
     return render_template("dashboard.html")
 
@@ -102,7 +126,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ---------------- RAILWAY ENTRY POINT ----------------
+# ---------------- RAILWAY ENTRY ----------------
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
@@ -112,9 +136,7 @@ if __name__ == "__main__":
     except Exception as e:
         print("DB init error:", e)
 
-    port = int(os.environ.get("PORT", 8080))
-
     app.run(
         host="0.0.0.0",
-        port=port
+        port=int(os.environ.get("PORT", 8080))
     )
