@@ -5,22 +5,29 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from dotenv import load_dotenv
 from mapreduce import run_mapreduce
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix   # NEW
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# ---------------- SECURITY ----------------
-app.secret_key = os.environ.get("SECRET_KEY", "default-secret")
+# NEW — must be right after Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# ---------------- SECURITY ----------------
+_secret = os.environ.get("SECRET_KEY")
+if not _secret:
+    raise RuntimeError("SECRET_KEY is not set in Railway environment variables!")
+app.secret_key = _secret
+
 app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True        # NEW
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["PERMANENT_SESSION_LIFETIME"] = 1800     # NEW — 30 min
 
 # ---------------- FOLDERS ----------------
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-
-# IMPORTANT FIX: ensure uploads folder exists (Railway safe)
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 ADMIN_USER = "taimoor"
@@ -52,15 +59,27 @@ def init_db():
     conn.close()
 
 
+# NEW — runs at startup for gunicorn (not inside __main__)
+try:
+    if os.environ.get("DATABASE_URL"):
+        init_db()
+except Exception as e:
+    print("DB init error:", e)
+
+
 # ---------------- ROUTES ----------------
 @app.route("/", methods=["GET", "POST"])
 def login():
+    if session.get("logged_in"):                    # NEW — skip login if already in
+        return redirect(url_for("dashboard"))
+
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
 
         if username == ADMIN_USER and password == ADMIN_PASS:
             session["logged_in"] = True
+            session.permanent = True                # NEW — respect 30 min lifetime
             return redirect(url_for("dashboard"))
         else:
             flash("Wrong username or password")
@@ -82,10 +101,8 @@ def dashboard():
         if not file.filename.endswith(".log"):
             return "Only .log files allowed"
 
-        # Safe filename handling
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-
         file.save(filepath)
 
         # ---------------- MAPREDUCE SAFETY ----------------
@@ -105,7 +122,7 @@ def dashboard():
             for key, value in results.items():
                 cur.execute(
                     "INSERT INTO results (filename, key, value) VALUES (%s, %s, %s)",
-                    (filename, key, value)
+                    (filename, key, int(value))    # NEW — int() cast for safety
                 )
 
             conn.commit()
@@ -129,14 +146,8 @@ def logout():
 # ---------------- RAILWAY ENTRY ----------------
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-
-    try:
-        if os.environ.get("DATABASE_URL"):
-            init_db()
-    except Exception as e:
-        print("DB init error:", e)
-
     app.run(
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080))
+        port=int(os.environ.get("PORT", 8080)),
+        debug=False
     )
