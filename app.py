@@ -8,7 +8,13 @@ from mapreduce import run_mapreduce
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY")
+
+# ---------------- SECURITY FIX (MOBILE + SESSION) ----------------
+app.secret_key = os.environ.get("SECRET_KEY", "default-secret")
+
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = True
+
 
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
@@ -21,7 +27,7 @@ ADMIN_PASS = "0000"
 def get_db():
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        raise Exception("DATABASE_URL not found in environment variables")
+        raise Exception("DATABASE_URL not found")
     return psycopg2.connect(db_url)
 
 
@@ -70,10 +76,8 @@ def dashboard():
             filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
             file.save(filepath)
 
-            # Run MapReduce
             results = run_mapreduce(filepath)
 
-            # Save to DB
             conn = get_db()
             cur = conn.cursor()
 
@@ -98,7 +102,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ---------------- MAIN (RAILWAY FIXED) ----------------
+# ---------------- RAILWAY ENTRY POINT ----------------
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
@@ -108,4 +112,9 @@ if __name__ == "__main__":
     except Exception as e:
         print("DB init error:", e)
 
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT")))
+    port = int(os.environ.get("PORT", 8080))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
