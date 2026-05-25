@@ -5,7 +5,6 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from dotenv import load_dotenv
 from mapreduce import run_mapreduce
 
-
 load_dotenv()
 
 app = Flask(__name__)
@@ -17,8 +16,14 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 ADMIN_USER = "taimoor"
 ADMIN_PASS = "0000"
 
+
+# ---------------- DATABASE ----------------
 def get_db():
-    return psycopg2.connect(os.environ.get("DATABASE_URL"))
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise Exception("DATABASE_URL not found in environment variables")
+    return psycopg2.connect(db_url)
+
 
 def init_db():
     conn = get_db()
@@ -36,47 +41,76 @@ def init_db():
     cur.close()
     conn.close()
 
+
+# ---------------- ROUTES ----------------
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
+
         if username == ADMIN_USER and password == ADMIN_PASS:
             session["logged_in"] = True
             return redirect(url_for("dashboard"))
         else:
             flash("Wrong username or password")
+
     return render_template("login.html")
+
 
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
+
     if request.method == "POST":
         file = request.files["logfile"]
+
         if file and file.filename.endswith(".log"):
             filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
             file.save(filepath)
+
+            # Run MapReduce
             results = run_mapreduce(filepath)
+
+            # Save to DB
             conn = get_db()
             cur = conn.cursor()
+
             for key, value in results.items():
                 cur.execute(
                     "INSERT INTO results (filename, key, value) VALUES (%s, %s, %s)",
                     (file.filename, key, value)
                 )
+
             conn.commit()
             cur.close()
             conn.close()
+
             return render_template("results.html", results=results, filename=file.filename)
+
     return render_template("dashboard.html")
+
 
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
+
+# ---------------- MAIN (RAILWAY FIXED) ----------------
 if __name__ == "__main__":
     multiprocessing.freeze_support()
-    init_db()
-    app.run(debug=True)
+
+    # Safe DB init (prevents crash if DB missing)
+    try:
+        if os.environ.get("DATABASE_URL"):
+            init_db()
+    except Exception as e:
+        print("DB init error:", e)
+
+    # Railway production server
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000))
+    )
