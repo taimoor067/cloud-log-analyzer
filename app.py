@@ -104,8 +104,9 @@ def dashboard():
             flash("No file selected", "error")
             return redirect(url_for("dashboard"))
 
-        if not file.filename.endswith(".log"):
-            flash("Only .log files are allowed", "error")
+        # reject anything that is not strictly filename.log
+        if not file.filename.endswith(".log") or file.filename.endswith(".log.text") or file.filename.endswith(".log.txt"):
+            flash("Invalid file. Only .log files are allowed. Your file appears to be: " + file.filename, "error")
             return redirect(url_for("dashboard"))
 
         filename = secure_filename(file.filename)

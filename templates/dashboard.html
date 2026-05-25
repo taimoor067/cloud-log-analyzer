@@ -263,6 +263,28 @@
 
 <main>
   <div class="page-header">
+    <main>
+
+  <!-- FLASH MESSAGES — shows errors from server -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div style="
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          color: #dc2626;
+          padding: 12px 16px;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          font-size: 14px;
+          font-weight: 500;
+        ">
+          ⚠️ {{ message }}
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  
     <h2>Dashboard</h2>
     <p>Upload server log files to analyze errors and traffic patterns.</p>
   </div>
