@@ -102,15 +102,10 @@ def logout():
 if __name__ == "__main__":
     multiprocessing.freeze_support()
 
-    # Safe DB init (prevents crash if DB missing)
     try:
         if os.environ.get("DATABASE_URL"):
             init_db()
     except Exception as e:
         print("DB init error:", e)
 
-    # Railway production server
-    app.run(
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8080))
-    )
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT")))
