@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Log Analyzer — Results</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f5f5f3;
+      --surface: #ffffff;
+      --border: #e8e8e5;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6b6b6b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-light: #eff6ff;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 24px rgba(0,0,0,0.07);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      min-height: 100vh;
+      color: var(--text-primary);
+    }
+
+    nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+      text-decoration: none;
+    }
+
+    .nav-icon {
+      width: 30px;
+      height: 30px;
+      background: var(--accent);
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-icon svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+
+    .nav-logout {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    .nav-logout:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+
+    .btn-back {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+
+    .btn-back:hover { background: var(--bg); }
+    .btn-back svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .page-header h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; }
+
+    .file-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 6px;
+    }
+
+    .file-pill svg { width: 12px; height: 12px; stroke: var(--text-secondary); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* SUMMARY CARDS */
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .sum-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+
+    .sum-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-secondary); }
+    .sum-value { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; margin-top: 4px; }
+    .sum-value.red { color: #dc2626; }
+    .sum-value.amber { color: #d97706; }
+    .sum-value.blue { color: var(--accent); }
+
+    /* CHART */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-header h3 { font-size: 14px; font-weight: 600; }
+    .card-header span { font-size: 12px; color: var(--text-secondary); }
+
+    .chart-wrap { padding: 24px; }
+
+    /* TABLE */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      padding: 11px 20px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-secondary);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.12s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafaf9; }
+
+    td { padding: 13px 20px; vertical-align: middle; }
+
+    .key-cell { display: flex; align-items: center; gap: 10px; }
+
+    .key-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-error { background: #fef2f2; color: #dc2626; }
+    .badge-hour { background: var(--accent-light); color: var(--accent); }
+    .badge-ok { background: #f0fdf4; color: #16a34a; }
+
+    .key-text { font-weight: 500; color: var(--text-primary); }
+
+    .bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+      min-width: 80px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--accent);
+      transition: width 0.6s ease;
+    }
+
+    .count-val { font-weight: 600; font-size: 14px; min-width: 32px; text-align: right; }
+
+    @media (max-width: 600px) {
+      nav { padding: 0 16px; }
+      main { padding: 28px 16px; }
+      .card-header { padding: 16px; }
+      .chart-wrap { padding: 16px; }
+      td, thead th { padding: 11px 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="/dashboard">
+    <div class="nav-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 12h6M9 16h6M9 8h6M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    </div>
+    Log Analyzer
+  </a>
+  <div class="nav-right">
+    <a href="/logout" class="nav-logout">Sign out</a>
+  </div>
+</nav>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h2>Analysis Results</h2>
+      <div class="file-pill">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        {{ filename }}
+      </div>
+    </div>
+    <a href="/dashboard" class="btn-back">
+      <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      Upload another
+    </a>
+  </div>
+
+  <!-- Summary stats -->
+  {% set total = results.values() | sum %}
+  {% set errors = [] %}
+  {% for k, v in results.items() %}{% if 'HTTP_4' in k or 'HTTP_5' in k %}{% set _ = errors.append(v) %}{% endif %}{% endfor %}
+
+  <div class="summary">
+    <div class="sum-card">
+      <div class="sum-label">Total Events</div>
+      <div class="sum-value blue">{{ total }}</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">Unique Keys</div>
+      <div class="sum-value">{{ results | length }}</div>
+    </div>
+    <div class="sum-card">
+      <div class="sum-label">Top Key</div>
+      <div class="sum-value" style="font-size:15px; margin-top:8px;">{{ results.keys() | list | first if results else '—' }}</div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Distribution Chart</h3>
+      <span>Top 10 keys by count</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="resultsChart" height="100"></canvas>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card">
+    <div class="card-header">
+      <h3>Full Breakdown</h3>
+      <span>{{ results | length }} keys found</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Count</th>
+            <th style="min-width:160px;">Distribution</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set max_val = results.values() | max if results else 1 %}
+          {% for key, value in results.items() %}
+          <tr>
+            <td>
+              <div class="key-cell">
+                {% if 'HTTP_5' in key %}
+                  <span class="key-badge badge-error">{{ key.replace('HTTP_','') }}</span>
+                {% elif 'HTTP_4' in key %}
+                  <span class="key-badge badge-error">{{ key.replace('HTTP_','') }}</span>
+                {% elif 'HTTP_2' in key %}
+                  <span class="key-badge badge-ok">{{ key.replace('HTTP_','') }}</span>
+                {% elif 'Hour_' in key %}
+                  <span class="key-badge badge-hour">{{ key.replace('Hour_','') }}:00</span>
+                {% else %}
+                  <span class="key-badge badge-hour">—</span>
+                {% endif %}
+                <span class="key-text">{{ key }}</span>
+              </div>
+            </td>
+            <td><span class="count-val">{{ value }}</span></td>
+            <td>
+              <div class="bar-wrap">
+                <div class="bar-track">
+                  <div class="bar-fill" style="width: {{ (value / max_val * 100) | int }}%"></div>
+                </div>
+                <span style="font-size:11px;color:var(--text-secondary);">{{ (value / max_val * 100) | int }}%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<script>
+  const raw = {{ results | tojson }};
+  const entries = Object.entries(raw).slice(0, 10);
+  const labels = entries.map(([k]) => k);
+  const values = entries.map(([, v]) => v);
+
+  const colors = labels.map(l =>
+    l.includes('HTTP_5') ? '#dc2626' :
+    l.includes('HTTP_4') ? '#f97316' :
+    l.includes('HTTP_2') ? '#16a34a' :
+    '#2563eb'
+  );
+
+  new Chart(document.getElementById('resultsChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors.map(c => c + '22'),
+        borderColor: colors,
+        borderWidth: 2,
+        borderRadius: 6,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1a1a',
+          titleColor: '#fff',
+          bodyColor: '#ccc',
+          padding: 10,
+          cornerRadius: 8,
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { family: 'DM Sans', size: 12 }, color: '#6b6b6b' }
+        },
+        y: {
+          grid: { color: '#e8e8e5' },
+          ticks: { font: { family: 'DM Sans', size: 12 }, color: '#6b6b6b' }
+        }
+      }
+    }
+  });
+</script>
+
+</body>
+</html>
