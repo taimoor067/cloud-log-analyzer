@@ -21,9 +21,16 @@ if not _secret:
 app.secret_key = _secret
 
 app.config["SESSION_COOKIE_SECURE"] = True
-app.config["SESSION_COOKIE_HTTPONLY"] = True        # NEW
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["PERMANENT_SESSION_LIFETIME"] = 1800     # NEW — 30 min
+app.config["PERMANENT_SESSION_LIFETIME"] = 1800
+
+# NEW — force Flask to know it is behind HTTPS proxy
+@app.before_request
+def force_https_scheme():
+    from flask import request
+    if request.headers.get("X-Forwarded-Proto") == "https":
+        request.environ["wsgi.url_scheme"] = "https"
 
 # ---------------- FOLDERS ----------------
 UPLOAD_FOLDER = "uploads"
