@@ -5,13 +5,12 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from dotenv import load_dotenv
 from mapreduce import run_mapreduce
 from werkzeug.utils import secure_filename
-from werkzeug.middleware.proxy_fix import ProxyFix   # NEW
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# NEW — must be right after Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # ---------------- SECURITY ----------------
@@ -25,7 +24,6 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["PERMANENT_SESSION_LIFETIME"] = 1800
 
-# NEW — force Flask to know it is behind HTTPS proxy
 @app.before_request
 def force_https_scheme():
     from flask import request
@@ -36,7 +34,7 @@ def force_https_scheme():
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024 
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
 ADMIN_USER = "taimoor"
 ADMIN_PASS = "0000"
@@ -67,7 +65,6 @@ def init_db():
     conn.close()
 
 
-# NEW — runs at startup for gunicorn (not inside __main__)
 try:
     if os.environ.get("DATABASE_URL"):
         init_db()
@@ -78,7 +75,7 @@ except Exception as e:
 # ---------------- ROUTES ----------------
 @app.route("/", methods=["GET", "POST"])
 def login():
-    if session.get("logged_in"):                    # NEW — skip login if already in
+    if session.get("logged_in"):
         return redirect(url_for("dashboard"))
 
     if request.method == "POST":
@@ -87,10 +84,10 @@ def login():
 
         if username == ADMIN_USER and password == ADMIN_PASS:
             session["logged_in"] = True
-            session.permanent = True                # NEW — respect 30 min lifetime
+            session.permanent = True
             return redirect(url_for("dashboard"))
         else:
-            flash("Wrong username or password")
+            flash("Wrong username or password", "error")
 
     return render_template("login.html")
 
@@ -104,39 +101,41 @@ def dashboard():
         file = request.files.get("logfile")
 
         if not file or file.filename == "":
-            return "No file selected"
+            flash("No file selected", "error")
+            return redirect(url_for("dashboard"))
 
         if not file.filename.endswith(".log"):
-            return "Only .log files allowed"
+            flash("Only .log files are allowed", "error")
+            return redirect(url_for("dashboard"))
 
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         file.save(filepath)
 
-        # ---------------- MAPREDUCE SAFETY ----------------
+        # ---------------- MAPREDUCE ----------------
         try:
             results = run_mapreduce(filepath)
+        except ValueError as e:
+            # log format not recognized — show friendly message on dashboard
+            flash(str(e), "error")
+            return redirect(url_for("dashboard"))
         except Exception as e:
-            return f"MapReduce Error: {str(e)}"
-
-        if not isinstance(results, dict):
-            return "Invalid MapReduce output (must be dict)"
+            # any other processing error
+            flash(f"Processing error: {str(e)}", "error")
+            return redirect(url_for("dashboard"))
 
         # ---------------- DATABASE SAVE ----------------
         try:
             conn = get_db()
             cur = conn.cursor()
-
             for key, value in results.items():
                 cur.execute(
                     "INSERT INTO results (filename, key, value) VALUES (%s, %s, %s)",
-                    (filename, key, int(value))    # NEW — int() cast for safety
+                    (filename, key, int(value))
                 )
-
             conn.commit()
             cur.close()
             conn.close()
-
         except Exception as e:
             return f"Database Error: {str(e)}"
 
